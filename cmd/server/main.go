@@ -19,26 +19,11 @@ import (
 const connectionString = "amqp://guest:guest@localhost:5672/"
 
 func main() {
-	fmt.Println("Starting Peril server...")
-
-	conn, err := amqp.Dial(connectionString)
-	if err != nil {
-		panic(err)
-	}
-
-	defer func() { _ = conn.Close() }()
-	fmt.Printf("connection to RabbitMQ successful\n")
-
-	ch, err := conn.Channel()
-	if err != nil {
-		panic(err)
-	}
-
 	shutdownSignal := make(chan os.Signal, 1)
 	signal.Notify(shutdownSignal, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	gameContext, cancel := context.WithCancel(context.Background())
-	gameOver := runGame(gameContext, ch)
+	gameOver := runGame(gameContext)
 
 	select {
 	case <-gameOver:
@@ -56,10 +41,25 @@ func main() {
 	}
 }
 
-func runGame(ctx context.Context, ch *amqp.Channel) chan struct{} {
+func runGame(ctx context.Context) chan struct{} {
 	done := make(chan struct{})
 
+	fmt.Println("Starting Peril server...")
+
+	conn, err := amqp.Dial(connectionString)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("connection to RabbitMQ successful\n")
+
+	ch, err := conn.Channel()
+	if err != nil {
+		panic(err)
+	}
+
 	go func() {
+		defer func() { _ = conn.Close() }()
 		gamelogic.PrintServerHelp()
 
 		inputChan := make(chan []string, 1)
