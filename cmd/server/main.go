@@ -55,12 +55,7 @@ func runGame(ctx context.Context) chan struct{} {
 		defer func() { _ = conn.Close() }()
 		fmt.Printf("connection to RabbitMQ successful\n")
 
-		ch, err := conn.Channel()
-		if err != nil {
-			panic(err)
-		}
-
-		gamelogic.PrintServerHelp()
+		ch, _, err := pubsub.DeclareAndBind(conn, routing.ExchangePerilTopic, routing.GameLogSlug, fmt.Sprintf("%s.*", routing.GameLogSlug), pubsub.Durable)
 
 		inputChan := make(chan []string, 1)
 

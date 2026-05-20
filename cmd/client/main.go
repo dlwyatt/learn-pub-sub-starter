@@ -51,6 +51,11 @@ func runGame(ctx context.Context) chan struct{} {
 			panic(err)
 		}
 
+		ch, err := conn.Channel()
+		if err != nil {
+			panic(err)
+		}
+
 		fmt.Printf("connection to RabbitMQ successful\n")
 
 		defer func() { _ = conn.Close() }()
@@ -62,19 +67,33 @@ func runGame(ctx context.Context) chan struct{} {
 			return
 		}
 
-		ch, queue, err := pubsub.DeclareAndBind(conn, routing.ExchangePerilDirect, fmt.Sprintf("%s.%s", routing.PauseKey, userName), routing.PauseKey, pubsub.Transient)
+		gameState := gamelogic.NewGameState(userName)
+
+		err = pubsub.SubscribeJSON(
+			conn,
+			routing.ExchangePerilDirect,
+			fmt.Sprintf("%s.%s", routing.PauseKey, userName),
+			routing.PauseKey,
+			pubsub.Transient,
+			handlerPause(gameState),
+		)
+
 		if err != nil {
-			fmt.Printf("Error binding client channel: %v\n", err)
+			fmt.Printf("Error Subscribing to pause queue: %v\n", err)
 			close(done)
 			return
 		}
 
-		_ = ch
-		_ = queue
+		err = pubsub.SubscribeJSON(
+			conn,
+			routing.ExchangePerilTopic,
+			fmt.Sprintf("%s.%s", routing.ArmyMovesPrefix, userName),
+			fmt.Sprintf("%s.*", routing.ArmyMovesPrefix),
+			pubsub.Transient,
+			handlerMove(gameState),
+		)
 
 		inputChan := make(chan []string, 1)
-
-		gameState := gamelogic.NewGameState(userName)
 
 		for {
 			go func() {
@@ -103,11 +122,19 @@ func runGame(ctx context.Context) chan struct{} {
 					fmt.Printf("Error from spawn command: %v\n", err)
 				}
 			case strings.EqualFold(command, "move"):
-				_, err := gameState.CommandMove(inputWords)
+				move, err := gameState.CommandMove(inputWords)
 				if err != nil {
 					fmt.Printf("Error from move command: %v\n", err)
 					continue
 				}
+
+				err = pubsub.PublishJSON(ch, routing.ExchangePerilTopic, fmt.Sprintf("%s.%s", routing.ArmyMovesPrefix, userName), move)
+				if err != nil {
+					fmt.Printf("error sending move to RabbitMQ: %v\n", err)
+					continue
+				}
+
+				fmt.Printf("move published successfully.\n")
 			case strings.EqualFold(command, "status"):
 				gameState.CommandStatus()
 			case strings.EqualFold(command, "help"):
@@ -125,4 +152,18 @@ func runGame(ctx context.Context) chan struct{} {
 	}()
 
 	return done
+}
+
+func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState) {
+	return func(state routing.PlayingState) {
+		defer fmt.Print("> ")
+		gs.HandlePause(state)
+	}
+}
+
+func handlerMove(gs *gamelogic.GameState) func(gamelogic.ArmyMove) {
+	return func(move gamelogic.ArmyMove) {
+		defer fmt.Print("> ")
+		gs.HandleMove(move)
+	}
 }
