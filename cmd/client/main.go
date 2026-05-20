@@ -43,16 +43,16 @@ func main() {
 func runGame(ctx context.Context) chan struct{} {
 	done := make(chan struct{})
 
-	fmt.Println("Starting Peril client...")
-
-	conn, err := amqp.Dial(connectionString)
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Printf("connection to RabbitMQ successful\n")
-
 	go func() {
+		fmt.Println("Starting Peril client...")
+
+		conn, err := amqp.Dial(connectionString)
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Printf("connection to RabbitMQ successful\n")
+
 		defer func() { _ = conn.Close() }()
 
 		userName, err := gamelogic.ClientWelcome()
@@ -108,8 +108,6 @@ func runGame(ctx context.Context) chan struct{} {
 					fmt.Printf("Error from move command: %v\n", err)
 					continue
 				}
-
-				fmt.Printf("Move successful.\n")
 			case strings.EqualFold(command, "status"):
 				gameState.CommandStatus()
 			case strings.EqualFold(command, "help"):
