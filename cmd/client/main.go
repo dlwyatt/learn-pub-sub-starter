@@ -50,10 +50,11 @@ func runGame(ctx context.Context) chan struct{} {
 		panic(err)
 	}
 
-	defer func() { _ = conn.Close() }()
 	fmt.Printf("connection to RabbitMQ successful\n")
 
 	go func() {
+		defer func() { _ = conn.Close() }()
+
 		userName, err := gamelogic.ClientWelcome()
 		if err != nil {
 			fmt.Printf("Error from client wecome: %v\n", err)
