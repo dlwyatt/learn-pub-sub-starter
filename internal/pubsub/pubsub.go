@@ -65,13 +65,21 @@ func DeclareAndBind(
 	return ch, queue, nil
 }
 
+type AckType uint
+
+const (
+	Ack AckType = iota
+	NackRequeue
+	NackDiscard
+)
+
 func SubscribeJSON[T any](
 	conn *amqp.Connection,
 	exchange,
 	queueName,
 	key string,
 	queueType SimpleQueueType,
-	handler func(T),
+	handler func(T) AckType,
 ) error {
 	ch, _, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
 	if err != nil {
@@ -92,12 +100,31 @@ func SubscribeJSON[T any](
 				continue
 			}
 
-			handler(body)
+			ackType := handler(body)
 
-			err = delivery.Ack(false)
-			if err != nil {
-				fmt.Printf("error acknolwedging delivery: %v\n", err)
+			switch ackType {
+			case Ack:
+				fmt.Printf("Acking message.\n")
+				err = delivery.Ack(false)
+				if err != nil {
+					fmt.Printf("error acknolwedging delivery: %v\n", err)
+				}
+			case NackDiscard:
+				fmt.Printf("Nacking message with discard.\n")
+				err = delivery.Nack(false, false)
+				if err != nil {
+					fmt.Printf("error acknolwedging delivery: %v\n", err)
+				}
+			case NackRequeue:
+				fmt.Printf("Nacking message with requeue.\n")
+				err = delivery.Nack(false, true)
+				if err != nil {
+					fmt.Printf("error acknolwedging delivery: %v\n", err)
+				}
+			default:
+				fmt.Printf("Unknown AckType %v\n", ackType)
 			}
+
 		}
 	}()
 
