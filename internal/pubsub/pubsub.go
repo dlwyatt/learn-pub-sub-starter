@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -52,7 +53,9 @@ func DeclareAndBind(
 		return nil, queue, fmt.Errorf("Value %v is not a known SimpleQueueType.", queueType)
 	}
 
-	queue, err = ch.QueueDeclare(queueName, durable, autoDelete, exclusive, false, nil)
+	queue, err = ch.QueueDeclare(queueName, durable, autoDelete, exclusive, false, amqp.Table{
+		"x-dead-letter-exchange": routing.ExchangePerilDeadLetter,
+	})
 	if err != nil {
 		return nil, queue, err
 	}
