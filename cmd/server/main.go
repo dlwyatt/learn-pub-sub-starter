@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -32,21 +33,37 @@ func main() {
 		panic(err)
 	}
 
-	gamelogic.PrintServerHelp()
+	shutdownSignal := make(chan os.Signal, 1)
+	signal.Notify(shutdownSignal, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	gameContext, cancel := context.WithCancel(context.Background())
+	gameOver := runGame(gameContext, ch)
 
-	inputChan := make(chan []string, 1)
-	for {
-		go func() {
-			inputChan <- gamelogic.GetInput()
-		}()
+	select {
+	case <-gameOver:
+		fmt.Println("runGame exited.")
+	case <-shutdownSignal:
+		fmt.Println("Received OS signal, shutting down.")
+		cancel()
+	}
+}
 
-		select {
-		case inputWords := <-inputChan:
-			if len(inputWords) == 0 {
-				continue
+func runGame(ctx context.Context, ch *amqp.Channel) chan struct{} {
+	done := make(chan struct{})
+
+	go func() {
+		gamelogic.PrintServerHelp()
+
+		inputChan := make(chan []string, 1)
+
+		for {
+			var inputWords []string
+
+			select {
+			case inputWords = <-inputChan:
+			case <-ctx.Done():
+				close(done)
+				return
 			}
 
 			command := inputWords[0]
@@ -54,7 +71,7 @@ func main() {
 			switch {
 			case strings.EqualFold(command, "pause"):
 				fmt.Println("sending pause message")
-				err = pubsub.PublishJSON(ch, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{
+				err := pubsub.PublishJSON(ch, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{
 					IsPaused: true,
 				})
 				if err != nil {
@@ -62,7 +79,7 @@ func main() {
 				}
 			case strings.EqualFold(command, "resume"):
 				fmt.Println("sending resume message")
-				err = pubsub.PublishJSON(ch, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{
+				err := pubsub.PublishJSON(ch, routing.ExchangePerilDirect, routing.PauseKey, routing.PlayingState{
 					IsPaused: false,
 				})
 				if err != nil {
@@ -72,13 +89,14 @@ func main() {
 				gamelogic.PrintServerHelp()
 			case strings.EqualFold(command, "quit"):
 				gamelogic.PrintQuit()
+				close(done)
 				return
 			default:
 				fmt.Printf("Command '%s' is unknown.\n", command)
 			}
-		case <-sigs:
-			fmt.Printf("\nshutting down\n")
-			return
+
 		}
-	}
+	}()
+
+	return done
 }
