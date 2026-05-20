@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
@@ -43,8 +44,15 @@ func main() {
 	case <-gameOver:
 		fmt.Println("runGame exited.")
 	case <-shutdownSignal:
-		fmt.Println("Received OS signal, shutting down.")
+		fmt.Printf("Received OS shutdown signal.\n")
 		cancel()
+
+		select {
+		case <-gameOver:
+			fmt.Printf("graceful shutdown completed.")
+		case <-time.After(5 * time.Second):
+			fmt.Printf("game shutdown timeout exceeded.")
+		}
 	}
 }
 
@@ -57,6 +65,10 @@ func runGame(ctx context.Context, ch *amqp.Channel) chan struct{} {
 		inputChan := make(chan []string, 1)
 
 		for {
+			go func() {
+				inputChan <- gamelogic.GetInput()
+			}()
+
 			var inputWords []string
 
 			select {
@@ -64,6 +76,10 @@ func runGame(ctx context.Context, ch *amqp.Channel) chan struct{} {
 			case <-ctx.Done():
 				close(done)
 				return
+			}
+
+			if len(inputWords) == 0 {
+				continue
 			}
 
 			command := inputWords[0]
@@ -94,7 +110,6 @@ func runGame(ctx context.Context, ch *amqp.Channel) chan struct{} {
 			default:
 				fmt.Printf("Command '%s' is unknown.\n", command)
 			}
-
 		}
 	}()
 
