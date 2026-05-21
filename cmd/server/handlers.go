@@ -15,7 +15,7 @@ func handlerLogs(ch *amqp.Channel) func(routing.GameLog) pubsub.AckType {
 		defer fmt.Print("> ")
 		err := gamelogic.WriteLog(gl)
 		if err != nil {
-			fmt.Printf("Error writing log to disk: %v\n")
+			fmt.Printf("Error writing log to disk: %v\n", err)
 			return pubsub.NackRequeue
 		}
 		return pubsub.Ack
