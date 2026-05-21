@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -123,7 +125,33 @@ func runGame(ctx context.Context) error {
 		case strings.EqualFold(command, "help"):
 			gamelogic.PrintClientHelp()
 		case strings.EqualFold(command, "spam"):
-			fmt.Printf("Spamming not allowed yet.\n")
+			if len(inputWords) < 2 {
+				fmt.Printf("No argument passed to spam command.\n")
+				continue
+			}
+			numMessages, err := strconv.Atoi(inputWords[1])
+			if err != nil || numMessages < 1 {
+				fmt.Printf("Invalid argument to spam command.\n")
+				continue
+			}
+
+			for range numMessages {
+				badMessage := gamelogic.GetMaliciousLog()
+				err := pubsub.PublishGob(
+					ch,
+					routing.ExchangePerilTopic,
+					fmt.Sprintf("%s.%s", routing.GameLogSlug, userName),
+					routing.GameLog{
+						CurrentTime: time.Now(),
+						Message:     badMessage,
+						Username:    userName,
+					},
+				)
+
+				if err != nil {
+					fmt.Printf("Error publishing spam: %v\n", err)
+				}
+			}
 		case strings.EqualFold(command, "quit"):
 			gamelogic.PrintQuit()
 			return nil

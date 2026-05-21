@@ -163,19 +163,16 @@ func subscribe[T any](
 
 			switch ackType {
 			case Ack:
-				fmt.Printf("Acking message.\n")
 				err = delivery.Ack(false)
 				if err != nil {
 					fmt.Printf("error acknolwedging delivery: %v\n", err)
 				}
 			case NackDiscard:
-				fmt.Printf("Nacking message with discard.\n")
 				err = delivery.Nack(false, false)
 				if err != nil {
 					fmt.Printf("error acknolwedging delivery: %v\n", err)
 				}
 			case NackRequeue:
-				fmt.Printf("Nacking message with requeue.\n")
 				err = delivery.Nack(false, true)
 				if err != nil {
 					fmt.Printf("error acknolwedging delivery: %v\n", err)
