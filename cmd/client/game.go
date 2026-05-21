@@ -70,7 +70,7 @@ func runGame(ctx context.Context) error {
 		routing.WarRecognitionsPrefix,
 		fmt.Sprintf("%s.*", routing.WarRecognitionsPrefix),
 		pubsub.Durable,
-		handlerWar(gameState),
+		handlerWar(gameState, ch),
 	)
 
 	if err != nil {
