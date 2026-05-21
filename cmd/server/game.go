@@ -23,9 +23,22 @@ func runGame(ctx context.Context) error {
 	}
 
 	defer func() { _ = conn.Close() }()
+	ch, err := conn.Channel()
+	if err != nil {
+		return err
+	}
+
 	fmt.Printf("connection to RabbitMQ successful\n")
 
-	ch, _, err := pubsub.DeclareAndBind(conn, routing.ExchangePerilTopic, routing.GameLogSlug, fmt.Sprintf("%s.*", routing.GameLogSlug), pubsub.Durable)
+	err = pubsub.SubscribeGob(
+		conn,
+		routing.ExchangePerilTopic,
+		routing.GameLogSlug,
+		fmt.Sprintf("%s.*", routing.GameLogSlug),
+		pubsub.Durable,
+		handlerLogs(ch),
+	)
+
 	if err != nil {
 		return err
 	}
